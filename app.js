@@ -8,7 +8,7 @@
 
   /* ---------- 저장 ---------- */
   function defaults() {
-    return { v: 1, laws: [], srs: {}, wrong: {}, notes: {}, procs: [], daily: { date: '', n: 0 }, settings: { level: 2, newPerDay: 10 } };
+    return { v: 1, laws: [], srs: {}, wrong: {}, notes: {}, procs: [], cases: {}, caseNotes: {}, daily: { date: '', n: 0 }, settings: { level: 2, newPerDay: 10 } };
   }
   function load() {
     try {
@@ -29,7 +29,7 @@
   }
 
   /* ---------- 상태 ---------- */
-  const U = { view: 'home', lawId: null, label: null, q: '', sess: null, draft: null, quiz: null, loading: true };
+  const U = { view: 'home', lawId: null, label: null, q: '', sess: null, draft: null, quiz: null, loading: true, caseId: null, cq: null, caseTag: '' };
   const getLaw = id => S.laws.find(l => l.id === id);
   const curLaw = () => getLaw(U.lawId) || S.laws[0] || null;
   const keyOf = (law, a) => law.id + '|' + a.label;
@@ -52,7 +52,7 @@
   }
 
   /* ---------- 공통 렌더 ---------- */
-  const NAV = [['home', '🏠', '홈'], ['browse', '📖', '조문'], ['study', '🧠', '암기'], ['procs', '🔁', '절차'], ['manage', '⚙️', '관리']];
+  const NAV = [['home', '🏠', '홈'], ['browse', '📖', '조문'], ['study', '🧠', '암기'], ['cases', '⚖️', '판례'], ['procs', '🔁', '절차'], ['manage', '⚙️', '관리']];
   function renderNav() {
     $('#nav').innerHTML = NAV.map(n => `<button data-act="nav" data-v="${n[0]}" class="${U.view === n[0] ? 'on' : ''}"><span class="ic">${n[1]}</span>${n[2]}</button>`).join('');
   }
@@ -89,6 +89,7 @@
       <div class="stat"><b>${sum('newToday')}</b><span>오늘 새로 볼 조문</span></div>
       <div class="stat"><b>${sum('wrong')}</b><span>오답 노트</span></div>
       <div class="stat"><b>${sum('studied')}/${sum('total')}</b><span>학습한 조문</span></div>
+      ${CASES.length ? `<div class="stat"><b>${caseCounts().due}</b><span>복습할 판례</span></div>` : ''}
     </div>
     <div class="row" style="margin:16px 0"><button class="btn pri" data-act="goStudy">🧠 암기 시작</button></div>
     ${laws.map(x => `<section class="card"><h2>${esc(x.l.name)}</h2>
@@ -110,8 +111,10 @@
   }
   function lawInfo(law) {
     const m = law.meta;
-    if (!m) return law.baseDate ? `<p class="sub">기준일 ${esc(law.baseDate)} (직접 붙여넣은 원문)</p>` : '';
-    return `<p class="sub">현행(시행 중) · 시행 ${esc(m['시행일자'])} · ${esc(kindLabel(m))} · 공포 ${esc(m['공포일자'])}</p>`
+    const cited = CASES.filter(c => (c.refs || []).some(r => r.law === law.name));
+    const citedHtml = cited.length ? `<div class="warnbox" style="background:rgba(47,111,219,.1);border-color:var(--accent)">⚖ 이 법령을 인용한 판례 ${cited.length}건 ${cited.map(c => `<button class="btn sm" data-act="openCase" data-id="${c.id}">${esc(c.법원명)} ${esc(c.선고일자)} ${esc(c.사건번호)}</button>`).join(' ')}<div class="sub">판결문이 인용한 조문 번호는 판결 당시 기준이라 현행 조문과 다를 수 있습니다.</div></div>` : '';
+    if (!m) return (law.baseDate ? `<p class="sub">기준일 ${esc(law.baseDate)} (직접 붙여넣은 원문)</p>` : '') + citedHtml;
+    return citedHtml + `<p class="sub">현행(시행 중) · 시행 ${esc(m['시행일자'])} · ${esc(kindLabel(m))} · 공포 ${esc(m['공포일자'])}</p>`
       + (law.pending && law.pending.length ? `<div class="warnbox pend">📅 이미 공포되어 <b>시행을 앞둔 개정이 ${law.pending.length}개 조문</b>에 있습니다. 조문 목록 맨 아래 「시행 예정 개정」에서 확인하세요.</div>` : '')
       + (law.notes || []).map(n => `<div class="warnbox">ℹ ${esc(n)}</div>`).join('');
   }
@@ -365,14 +368,103 @@
     if (msg) toast(msg);
   }
 
+  /* ---------- 판례 (data/cases/) ---------- */
+  let CASES = [];
+  const CASE_BODY = {};
+  async function loadCases() {
+    try {
+      const r = await fetch('data/cases/index.json', { cache: 'no-cache' });
+      if (!r.ok) return;
+      const d = await r.json(); CASES = d.cases || [];
+      if (!U.sess && (U.view === 'cases' || U.view === 'home' || U.view === 'browse') && !(U.cq && U.cq.shown)) render();
+    } catch (e) { /* 오프라인 등: 판례 없이 동작 */ }
+  }
+  const linesHtml = ls => (ls || []).map(l => `<p class="ln${l.startsWith('【') ? ' cap' : ''}">${esc(l)}</p>`).join('');
+  const secHtml = (t, ls) => ls && ls.length ? `<h3>${t}</h3>${linesHtml(ls)}` : '';
+  function splitName(n) { const i = n.indexOf('['); return i > 0 ? { name: n.slice(0, i).trim(), sub: n.slice(i).replace(/^\[|\]$/g, '') } : { name: n, sub: '' }; }
+  const caseHead = c => `${esc(c.법원명)} · ${esc(c.선고일자)} · ${esc(c.사건번호)} · ${esc(c.사건종류)}`;
+  const tagsHtml = c => c.tags.map(g => `<span class="badge pend">${esc(g)}</span>`).join(' ');
+  function caseCounts() {
+    const t = C.today();
+    return { due: CASES.filter(c => S.cases[c.id] && S.cases[c.id].due <= t).length, fresh: CASES.filter(c => !S.cases[c.id]).length };
+  }
+  function vCases() {
+    if (U.cq) { vCaseCard(); return; }
+    if (U.caseId) { vCaseView(); return; }
+    if (!CASES.length) { main('<h1>판례</h1><div class="card empty">판례를 불러오는 중이거나 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.</div>'); return; }
+    const tags = Array.from(new Set([].concat(...CASES.map(c => c.tags))));
+    const list = CASES.filter(c => !U.caseTag || c.tags.includes(U.caseTag));
+    const cc = caseCounts();
+    main(`<h1>판례</h1>
+    <p class="sub">특수교육·장애학생 교육·학교 책임·장애인 차별과 관련된 판결 ${CASES.length}건입니다. 판시사항·판결요지·전문은 국가법령정보센터 원문 그대로이고, 분류 태그만 앱이 임의로 붙인 것입니다.</p>
+    <div class="row" style="margin:10px 0"><button class="btn pri" data-act="caseStart" data-m="due">📝 결론 맞히기 (복습 ${cc.due} · 새 판례 ${Math.min(3, cc.fresh)})</button><button class="btn" data-act="caseStart" data-m="fresh">새 판례 3개</button></div>
+    <div class="chips"><button class="chip ${U.caseTag ? '' : 'picked'}" data-act="caseTag" data-t="">전체</button>${tags.map(g => `<button class="chip ${U.caseTag === g ? 'picked' : ''}" data-act="caseTag" data-t="${esc(g)}">${esc(g)}</button>`).join('')}</div>
+    ${list.map(c => { const s = S.cases[c.id], sn = splitName(c.사건명), t = C.today();
+      return `<section class="card"><div class="sub">${caseHead(c)}</div><h2 style="margin:.2em 0">${esc(sn.name)}</h2>${sn.sub ? `<div class="sub">${esc(sn.sub)}</div>` : ''}
+      <div style="margin:.3em 0">${tagsHtml(c)} ${s ? (s.due <= t ? '<span class="badge due">복습</span>' : '<span class="badge" style="background:var(--ok)">학습함</span>') : ''}</div>
+      <p style="margin:.5em 0">${esc((c.판시사항[0] || '').slice(0, 170))}${(c.판시사항[0] || '').length > 170 ? '…' : ''}</p>
+      <button class="btn sm pri" data-act="openCase" data-id="${c.id}">자세히</button></section>`; }).join('')}${FOOT}`);
+  }
+  function vCaseView() {
+    const c = CASES.find(x => x.id === U.caseId);
+    if (!c) { U.caseId = null; vCases(); return; }
+    const sn = splitName(c.사건명);
+    const lawRefs = (c.refs || []).map(r => { const law = S.laws.find(l => l.name === r.law);
+      return `<div style="margin:6px 0">${law ? `<button class="btn sm" data-act="openLawFromCase" data-id="${law.id}">${esc(r.law)} 보기</button>` : esc(r.law)} <span class="sub">판결문 인용: ${esc(r.cited.join(', '))} — 판결 당시 조문 번호이며 현행과 다를 수 있습니다.</span></div>`; }).join('');
+    main(`<button class="btn sm" data-act="caseBack">← 판례 목록</button>
+    <article class="card art" style="margin-top:12px"><div class="sub">${caseHead(c)}</div><h2>${esc(sn.name)}</h2>${sn.sub ? `<p class="sub">${esc(sn.sub)}</p>` : ''}
+      <div>${tagsHtml(c)}</div>
+      ${secHtml('판시사항', c.판시사항)}${secHtml('판결요지', c.판결요지)}${secHtml('참조조문', c.참조조문)}${secHtml('참조판례', c.참조판례)}
+      ${lawRefs ? `<h3>이 앱의 법령과 연결</h3>${lawRefs}` : ''}
+      <details data-case-body data-id="${c.id}" style="margin-top:14px"><summary><b>판결 전문 보기</b> <span class="sub">(약 ${c.bodyChars.toLocaleString()}자)</span></summary><div id="caseBody" class="sub">불러오는 중…</div></details>
+      <div class="row" style="margin-top:14px"><a class="btn sm" href="${esc(c.출처)}" target="_blank" rel="noopener">원문 보기 ↗</a><button class="btn sm pri" data-act="caseStart1" data-id="${c.id}">이 판례 결론 맞히기</button></div>
+      <label for="cmemo">내 업무 메모 (우리 업무에 주는 시사점 등)</label>
+      <textarea id="cmemo" data-cmemo="${c.id}" style="min-height:100px">${esc(S.caseNotes[c.id] || '')}</textarea></article>${FOOT}`);
+  }
+  async function loadCaseBody(id) {
+    const box = $('#caseBody'); if (!box) return;
+    if (CASE_BODY[id]) { box.innerHTML = linesHtml(CASE_BODY[id]); return; }
+    try {
+      const c = CASES.find(x => x.id === id), r = await fetch('data/' + c.file);
+      if (!r.ok) throw new Error('body');
+      const d = await r.json(); CASE_BODY[id] = d['판례내용'];
+      const b = $('#caseBody'); if (b) b.innerHTML = linesHtml(CASE_BODY[id]);
+    } catch (err) { box.textContent = '판결 전문을 불러오지 못했습니다. 인터넷 연결을 확인하거나 「원문 보기」를 이용하세요.'; }
+  }
+  function startCaseSession(ids) {
+    if (!ids.length) { toast('지금 학습할 판례가 없습니다'); return; }
+    U.cq = { ids: ids.slice(), n: ids.length, i: 0, shown: false, re: {} }; U.view = 'cases'; U.caseId = null; render();
+  }
+  function vCaseCard() {
+    const q = U.cq;
+    if (q.i >= q.ids.length) { main(`<h1>수고하셨습니다</h1><section class="card empty"><h2>${q.n}개 판례 학습을 마쳤습니다</h2><button class="btn pri" data-act="caseEnd">판례 목록으로</button></section>`); return; }
+    const c = CASES.find(x => x.id === q.ids[q.i]);
+    if (!c) { q.i++; render(); return; }
+    const sn = splitName(c.사건명);
+    const concl = c.판결요지.length ? linesHtml(c.판결요지) : '<p class="sub">이 판례에는 판결요지가 없습니다. 「판례 상세」에서 판결 전문을 확인하세요.</p>';
+    main(`<div class="progress"><i style="width:${Math.round(q.i / q.n * 100)}%"></i></div>
+    <div class="row" style="justify-content:space-between"><span class="sub">${q.i + 1} / ${q.ids.length}</span><button class="btn sm" data-act="caseEnd">그만하기</button></div>
+    <article class="card card-study"><div class="sub">${caseHead(c)}</div><h2>${esc(sn.name)}</h2>
+      <h3>쟁점 (판시사항)</h3>${linesHtml(c.판시사항)}
+      ${q.shown ? `<h3>결론 (판결요지)</h3>${concl}<div class="row" style="margin-top:10px"><button class="btn sm" data-act="openCase" data-id="${c.id}">판례 상세</button></div>`
+        : '<p class="sub">법원이 어떻게 판단했을지 먼저 생각해 본 뒤 결론을 확인하세요.</p><button class="btn pri" data-act="caseReveal">결론 보기</button>'}</article>
+    <div class="row" ${q.shown ? '' : 'hidden'}><button class="btn bad" data-act="caseGrade" data-g="0">몰랐다</button><button class="btn warn" data-act="caseGrade" data-g="1">애매</button><button class="btn ok" data-act="caseGrade" data-g="2">알았다</button></div>`);
+  }
+  function caseGrade(g) {
+    const q = U.cq, id = q.ids[q.i], r = C.nextState(S.cases[id], g, C.today());
+    S.cases[id] = r.state;
+    if (g === 0 && !q.re[id]) { q.re[id] = 1; q.ids.push(id); }
+    save(); q.i++; q.shown = false; render();
+  }
+
   /* ---------- 라우팅·이벤트 ---------- */
   function render() {
     renderNav();
-    ({ home: vHome, browse: vBrowse, study: vStudy, procs: vProcs, manage: vManage }[U.view] || vHome)();
+    ({ home: vHome, browse: vBrowse, study: vStudy, cases: vCases, procs: vProcs, manage: vManage }[U.view] || vHome)();
     window.scrollTo(0, 0);
   }
   const A = {
-    nav: t => { U.view = t.dataset.v; if (U.view !== 'study') { /* 진행 중 세션은 유지 */ } render(); },
+    nav: t => { if (t.dataset.v === 'cases' && U.view === 'cases' && !U.cq) U.caseId = null; U.view = t.dataset.v; render(); },  // 진행 중 학습 세션은 유지
     goStudy: () => { U.view = 'study'; render(); },
     openLaw: t => { U.lawId = t.dataset.id; U.view = 'browse'; U.label = null; render(); },
     openArt: t => { U.label = t.dataset.l; updateToc(); updateArt(); if (window.innerWidth < 820) $('#artView').scrollIntoView({ behavior: 'smooth' }); },
@@ -396,6 +488,19 @@
     quizEnd: () => { U.quiz = null; render(); },
     analyze, saveLaw,
     resync: () => syncBuiltin(true),
+    openCase: t => { U.cq = null; U.caseId = t.dataset.id; U.view = 'cases'; render(); },
+    caseBack: () => { U.caseId = null; render(); },
+    caseTag: t => { U.caseTag = t.dataset.t; render(); },
+    caseStart: t => {
+      const tt = C.today(), due = [], fresh = [];
+      for (const c of CASES) { const s = S.cases[c.id]; if (s) { if (s.due <= tt) due.push(c.id); } else fresh.push(c.id); }
+      startCaseSession(t.dataset.m === 'fresh' ? fresh.slice(0, 3) : due.concat(fresh.slice(0, 3)));
+    },
+    caseStart1: t => startCaseSession([t.dataset.id]),
+    caseReveal: () => { U.cq.shown = true; render(); },
+    caseGrade: t => caseGrade(+t.dataset.g),
+    caseEnd: () => { U.cq = null; render(); },
+    openLawFromCase: t => { U.lawId = t.dataset.id; U.label = null; U.caseId = null; U.view = 'browse'; render(); },
     lawDel: t => {
       const law = getLaw(t.dataset.id);
       if (!law || !confirm('「' + law.name + '」과 이 법령의 학습 기록을 삭제할까요?')) return;
@@ -411,9 +516,14 @@
   };
   document.addEventListener('click', e => { const t = e.target.closest('[data-act]'); if (t && A[t.dataset.act]) A[t.dataset.act](t, e); });
   document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('blank')) { e.preventDefault(); e.target.classList.toggle('open'); } });
+  document.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.caseBody !== undefined && d.open) loadCaseBody(d.dataset.id); }, true);
   let memoTimer;
   document.addEventListener('input', e => {
     if (e.target.id === 'q') { U.q = e.target.value; updateToc(); }
+    if (e.target.dataset && e.target.dataset.cmemo) {
+      const id = e.target.dataset.cmemo, v = e.target.value; clearTimeout(memoTimer);
+      memoTimer = setTimeout(() => { if (v.trim()) S.caseNotes[id] = v; else delete S.caseNotes[id]; save(); }, 400);
+    }
     if (e.target.dataset && e.target.dataset.memo) {
       const k = e.target.dataset.memo, v = e.target.value; clearTimeout(memoTimer);
       memoTimer = setTimeout(() => { if (v.trim()) S.notes[k] = v; else delete S.notes[k]; save(); }, 400);
@@ -440,5 +550,6 @@
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   render();
   syncBuiltin(false);
+  loadCases();
   window.__LS = { get S() { return S; }, U: U, render: render }; // 디버그용
 })();

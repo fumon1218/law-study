@@ -86,6 +86,9 @@ try:
         pg.click('[data-act=quizCheck]')
         assert '모두 맞았습니다' in pg.inner_text('#main')
 
+        pg.click('#nav button[data-v=cases]')
+        assert '불러오지 못했습니다' in pg.inner_text('#main'), '판례 데이터 없을 때 안내'
+
         # 새로고침 후에도 유지
         pg.reload(); pg.click('#nav button[data-v=home]')
         assert '시험법' in pg.inner_text('#main')
@@ -153,6 +156,41 @@ try:
         pg2.set_viewport_size({'width': 1180, 'height': 820})
         pg2.locator('#tocList button', has_text='제28조의2').click()
         pg2.screenshot(path='/tmp/law-study-builtin-desktop.png')
+        # ---------- 판례 ----------
+        pg2.click('#nav button[data-v=cases]')
+        pg2.wait_for_selector('text=판결 10건')
+        assert pg2.locator('#main section.card').count() == 10
+        pg2.click('.chip:has-text("특수학교 설립")')
+        assert pg2.locator('#main section.card').count() == 2
+        pg2.click('.chip:has-text("전체")')
+        pg2.locator('#main section.card', has_text='2012다95134').locator('[data-act=openCase]').click()
+        txt = pg2.inner_text('#main')
+        assert '보호감독의무' in txt and '판시사항' in txt and '판결요지' in txt, txt[:300]
+        assert '현행과 다를 수 있습니다' in txt and '장애인 등에 대한 특수교육법 보기' in txt
+        pg2.click('summary:has-text("판결 전문 보기")')
+        pg2.wait_for_selector('#caseBody p.ln')
+        assert '상고이유를 판단한다' in pg2.inner_text('#caseBody')
+        pg2.fill('#cmemo', '학교장 책임 주의'); pg2.wait_for_timeout(600)
+        assert pg2.evaluate('Object.values(window.__LS.S.caseNotes)[0]') == '학교장 책임 주의'
+        pg2.click('[data-act=openLawFromCase]')
+        assert '이 법령을 인용한 판례 1건' in pg2.inner_text('#main')
+        pg2.click('[data-act=openCase]')
+        assert '보호감독의무' in pg2.inner_text('#main')
+        pg2.click('[data-act=caseBack]')
+        pg2.click('[data-act=caseStart][data-m=due]')
+        assert '결론 (판결요지)' not in pg2.inner_text('#main')
+        pg2.click('[data-act=caseReveal]')
+        assert '결론 (판결요지)' in pg2.inner_text('#main')
+        pg2.click('[data-act=caseGrade][data-g="0"]')
+        assert pg2.evaluate('window.__LS.U.cq.ids.length') == 4, '몰랐다 판례는 재출제'
+        pg2.click('[data-act=caseEnd]')
+        assert pg2.evaluate('Object.keys(window.__LS.S.cases).length') == 1
+        pg2.set_viewport_size({'width': 390, 'height': 800}); pg2.click('#nav button[data-v=cases]')
+        assert pg2.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), '판례 화면 가로 넘침'
+        pg2.screenshot(path='/tmp/law-study-cases-mobile.png')
+        pg2.set_viewport_size({'width': 1180, 'height': 820})
+        pg2.locator('#main section.card', has_text='2012다95134').locator('[data-act=openCase]').click()
+        pg2.screenshot(path='/tmp/law-study-case-desktop.png')
         ctx2.close()
         b.close()
     assert not errors, errors

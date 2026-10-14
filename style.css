@@ -52,6 +52,7 @@ label{display:block;font-size:.85rem;color:var(--sub);margin:12px 0 4px}
 .badge.pend{background:#6b4fbb}
 .pendbox{border:1px solid #6b4fbb;background:rgba(107,79,187,.09);border-radius:12px;padding:12px 16px;margin-top:18px}
 .warnbox.pend{background:rgba(107,79,187,.1);border-color:#6b4fbb}
+.ln.cap{font-weight:700;margin-top:.9em}
 .ln.note2{color:var(--sub);font-size:.85rem;margin:.25em 0}
 details summary{cursor:pointer;margin:6px 0}
 .art h2{margin-bottom:.2em}
