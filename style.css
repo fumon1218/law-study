@@ -49,6 +49,11 @@ label{display:block;font-size:.85rem;color:var(--sub);margin:12px 0 4px}
 .badge{display:inline-block;font-size:.7rem;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle;background:var(--warn);color:#fff}
 .badge.due{background:var(--accent)}
 .badge.wr{background:var(--bad)}
+.badge.pend{background:#6b4fbb}
+.pendbox{border:1px solid #6b4fbb;background:rgba(107,79,187,.09);border-radius:12px;padding:12px 16px;margin-top:18px}
+.warnbox.pend{background:rgba(107,79,187,.1);border-color:#6b4fbb}
+.ln.note2{color:var(--sub);font-size:.85rem;margin:.25em 0}
+details summary{cursor:pointer;margin:6px 0}
 .art h2{margin-bottom:.2em}
 .ln{margin:.35em 0}
 .ln.h{padding-left:0}

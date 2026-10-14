@@ -29,7 +29,7 @@
   }
 
   /* ---------- 상태 ---------- */
-  const U = { view: 'home', lawId: null, label: null, q: '', sess: null, draft: null, quiz: null };
+  const U = { view: 'home', lawId: null, label: null, q: '', sess: null, draft: null, quiz: null, loading: true };
   const getLaw = id => S.laws.find(l => l.id === id);
   const curLaw = () => getLaw(U.lawId) || S.laws[0] || null;
   const keyOf = (law, a) => law.id + '|' + a.label;
@@ -57,7 +57,7 @@
     $('#nav').innerHTML = NAV.map(n => `<button data-act="nav" data-v="${n[0]}" class="${U.view === n[0] ? 'on' : ''}"><span class="ic">${n[1]}</span>${n[2]}</button>`).join('');
   }
   const main = html => { $('#main').innerHTML = html; };
-  const FOOT = '<p class="foot">※ 이 앱의 법령 본문은 직접 붙여넣으신 국가법령정보센터 원문입니다. 법령은 수시로 개정되므로 업무 적용 전에는 각 조문의 「원문 보기」 링크로 현행 여부를 확인하세요. 앱이 만든 빈칸·퀴즈 등 가공 내용은 참고용입니다.</p>';
+  const FOOT = '<p class="foot">※ 법령 본문은 국가법령정보센터 원문을 정리한 공개 데이터(또는 직접 붙여넣은 원문)입니다. 데이터 반영 시차가 있을 수 있으므로 업무 적용 전에는 각 조문의 「원문 보기」 링크로 현행 여부를 확인하세요. 앱이 만든 빈칸·퀴즈 등 가공 내용은 참고용입니다.</p>';
   function lawSelect(id) {
     if (S.laws.length < 2) return '';
     return `<select data-change="law" id="${id}" style="max-width:360px">${S.laws.map(l => `<option value="${l.id}" ${l.id === (curLaw() || {}).id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>`;
@@ -73,6 +73,7 @@
 
   /* ---------- 홈 ---------- */
   function vHome() {
+    if (!S.laws.length && U.loading) { main('<h1>특수교육법 학습</h1><section class="card empty"><h2>법령을 불러오는 중…</h2></section>'); return; }
     if (!S.laws.length) {
       main(`<h1>특수교육법 학습</h1>
       <section class="card empty"><h2>먼저 법령 원문을 가져오세요</h2>
@@ -91,7 +92,7 @@
     </div>
     <div class="row" style="margin:16px 0"><button class="btn pri" data-act="goStudy">🧠 암기 시작</button></div>
     ${laws.map(x => `<section class="card"><h2>${esc(x.l.name)}</h2>
-      <div class="sub">기준일 ${esc(x.l.baseDate || '미입력')} · 조문 ${x.c.total}개 · 복습 ${x.c.due} · 오답 ${x.c.wrong}</div>
+      <div class="sub">기준일 ${esc(x.l.baseDate || '미입력')} · 조문 ${x.c.total}개 · 복습 ${x.c.due} · 오답 ${x.c.wrong}${x.l.pending && x.l.pending.length ? ' · 📅 시행 예정 개정 ' + x.l.pending.length + '건' : ''}</div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-act="openLaw" data-id="${x.l.id}">조문 보기</button>
       <a class="btn sm" href="${C.lawUrl(x.l.name)}" target="_blank" rel="noopener">원문 법령 ↗</a></div></section>`).join('')}${FOOT}`);
   }
@@ -102,9 +103,23 @@
     if (!law) { vHome(); return; }
     U.lawId = law.id;
     main(`<div class="row" style="justify-content:space-between"><h1>${esc(law.name)}</h1>${lawSelect('lawSel')}</div>
+    ${lawInfo(law)}
     <div class="split"><aside class="toc"><input id="q" placeholder="조문·키워드 검색" value="${esc(U.q)}"><div id="tocList"></div></aside>
     <section id="artView"></section></div>${FOOT}`);
     updateToc(); updateArt();
+  }
+  function lawInfo(law) {
+    const m = law.meta;
+    if (!m) return law.baseDate ? `<p class="sub">기준일 ${esc(law.baseDate)} (직접 붙여넣은 원문)</p>` : '';
+    return `<p class="sub">현행(시행 중) · 시행 ${esc(m['시행일자'])} · ${esc(kindLabel(m))} · 공포 ${esc(m['공포일자'])}</p>`
+      + (law.pending && law.pending.length ? `<div class="warnbox pend">📅 이미 공포되어 <b>시행을 앞둔 개정이 ${law.pending.length}개 조문</b>에 있습니다. 조문 목록 맨 아래 「시행 예정 개정」에서 확인하세요.</div>` : '')
+      + (law.notes || []).map(n => `<div class="warnbox">ℹ ${esc(n)}</div>`).join('');
+  }
+  function pendHtml(p, law) {
+    const am = p.amendments.map(x => `<div class="sub">공포 ${esc(x['공포일자'])} · ${esc(kindLabel({ '법령구분': (law.meta || {})['법령구분'], '공포번호': x['공포번호'] }))} · ${x['시행일자'] ? '시행 ' + esc(x['시행일자']) : esc(x['시행메모'] || '시행일은 부칙 참고')}</div>
+      <details><summary class="sub">부칙 보기</summary>${x['부칙'].map(l => `<p class="ln note2">${esc(l)}</p>`).join('')}</details>`).join('');
+    const body = p.removed ? '<p>이 조문은 삭제될 예정입니다.</p>' : rowsHtml(C.makeBlanks({ label: p.label, lines: p.lines }, 0, 0));
+    return `<div class="pendbox"><b>📅 시행 예정 개정</b> <span class="sub">(아직 시행 전 · 현재는 위의 현행 조문이 적용됩니다)</span>${am}<h3>개정 후 본문</h3>${body}</div>`;
   }
   function updateToc() {
     const law = curLaw(); if (!law) return;
@@ -113,20 +128,24 @@
       if (q && !(a.label + a.title + a.lines.join(' ')).includes(q)) continue;
       if (a.chapter !== chap) { chap = a.chapter; if (chap) h += `<div class="chap">${esc(chap)}</div>`; }
       const k = keyOf(law, a), s = S.srs[k], t = C.today();
-      h += `<button data-act="openArt" data-l="${esc(a.label)}" class="${U.label === a.label ? 'on' : ''} ${C.isDeleted(a) ? 'del' : ''}">${esc(a.label)}${a.title ? ' ' + esc(a.title) : ''}${a.changed ? '<span class="badge">개정</span>' : ''}${S.wrong[k] ? '<span class="badge wr">오답</span>' : (s && s.due <= t ? '<span class="badge due">복습</span>' : '')}</button>`;
+      h += `<button data-act="openArt" data-l="${esc(a.label)}" class="${U.label === a.label ? 'on' : ''} ${C.isDeleted(a) ? 'del' : ''}">${esc(a.label)}${a.title ? ' ' + esc(a.title) : ''}${a.changed ? '<span class="badge">개정</span>' : ''}${(law.pending || []).some(p => p.label === a.label) ? '<span class="badge pend">예정</span>' : ''}${S.wrong[k] ? '<span class="badge wr">오답</span>' : (s && s.due <= t ? '<span class="badge due">복습</span>' : '')}</button>`;
     }
+    const pend = (law.pending || []).filter(p => !q || (p.label + p.title + p.lines.join(' ')).includes(q));
+    if (pend.length) h += '<div class="chap">📅 시행 예정 개정</div>' + pend.map(p => `<button data-act="openArt" data-l="${esc(p.label)}" class="${U.label === p.label ? 'on' : ''}">${esc(p.label)}${p.title ? ' ' + esc(p.title) : ''}<span class="badge pend">${p.isNew ? '신설' : p.removed ? '삭제' : '개정'}</span></button>`).join('');
     $('#tocList').innerHTML = h || '<div class="empty sub">검색 결과가 없습니다</div>';
   }
   function updateArt() {
     const law = curLaw(), box = $('#artView'); if (!box || !law) return;
-    const a = law.articles.find(x => x.label === U.label);
-    if (!a) { box.innerHTML = '<div class="card empty">조문 목록에서 조문을 선택하세요.</div>'; return; }
+    const a0 = law.articles.find(x => x.label === U.label);
+    const p = (law.pending || []).find(x => x.label === U.label);
+    if (!a0 && !p) { box.innerHTML = '<div class="card empty">조문 목록에서 조문을 선택하세요.</div>'; return; }
+    const a = a0 || { label: p.label, title: p.title, chapter: p.chapter, lines: [] };
     const k = keyOf(law, a);
     box.innerHTML = `<article class="card art"><h2>${esc(a.label)}${a.title ? '(' + esc(a.title) + ')' : ''}${a.changed ? `<span class="badge">개정 ${esc(a.changed)}</span>` : ''}</h2>
-      <div class="sub">${esc(a.chapter || '')}</div>${artBody(a)}
+      <div class="sub">${esc(a.chapter || '')}</div>${a0 ? artBody(a) : '<p class="sub">현재 시행 중인 조문이 아닙니다. 아래 시행 예정 개정으로 신설됩니다.</p>'}${p ? pendHtml(p, law) : ''}
       <div class="row" style="margin-top:14px">
-        <a class="btn sm" href="${C.lawUrl(law.name, a.label)}" target="_blank" rel="noopener">원문 보기 ↗</a>
-        ${C.isDeleted(a) ? '' : `<button class="btn sm pri" data-act="studyOne" data-l="${esc(a.label)}">이 조문 암기</button>`}</div>
+        <a class="btn sm" href="${C.lawUrl(law.name, a0 ? a.label : '')}" target="_blank" rel="noopener">원문 보기 ↗</a>
+        ${(!a0 || C.isDeleted(a)) ? '' : `<button class="btn sm pri" data-act="studyOne" data-l="${esc(a.label)}">이 조문 암기</button>`}</div>
       <label for="memo">내 메모 (업무 시 주의점, 연상법 등)</label>
       <textarea id="memo" data-memo="${esc(k)}" style="min-height:100px">${esc(S.notes[k] || '')}</textarea></article>`;
   }
@@ -258,7 +277,9 @@
       <label for="lt">본문</label><textarea id="lt" placeholder="제1조(목적) ...">${esc(d ? d.raw : '')}</textarea>
       <div class="row" style="margin-top:12px"><button class="btn pri" data-act="analyze">분석</button></div>
       ${d && d.parsed ? previewHtml(d) : ''}</section>
-    <section class="card"><h2>저장된 법령</h2>${S.laws.length ? S.laws.map(l => `<div class="row" style="justify-content:space-between;margin:8px 0"><span>${esc(l.name)} <span class="sub">조문 ${l.articles.length} · 기준일 ${esc(l.baseDate || '-')}</span></span><button class="btn sm" data-act="lawDel" data-id="${l.id}">삭제</button></div>`).join('') : '<p class="sub">아직 없습니다.</p>'}</section>
+    <section class="card"><h2>저장된 법령</h2>${S.laws.length ? S.laws.map(l => `<div class="row" style="justify-content:space-between;margin:8px 0"><span>${esc(l.name)} <span class="sub">조문 ${l.articles.length} · 기준일 ${esc(l.baseDate || '-')}</span></span>${l.builtin ? '<span class="sub">기본 제공</span>' : `<button class="btn sm" data-act="lawDel" data-id="${l.id}">삭제</button>`}</div>`).join('') : '<p class="sub">아직 없습니다.</p>'}
+      <div class="row" style="margin-top:10px"><button class="btn sm" data-act="resync">내장 법령 다시 불러오기</button></div>
+      <p class="sub">기본 제공 법령은 국가법령정보센터 원문을 정리한 공개 데이터(legalize-kr)입니다. 앱을 열 때 새 버전이 있으면 자동으로 반영되고, 바뀐 조문은 「개정」 표시와 함께 복습 대상으로 돌아옵니다.</p></section>
     <section class="card"><h2>학습 설정</h2>
       <label for="np">하루 새 조문 수</label><select id="np" data-change="newPer">${[5, 10, 15, 20, 30].map(n => `<option ${S.settings.newPerDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></section>
     <section class="card"><h2>백업</h2><p class="sub">학습 기록은 이 기기의 브라우저에만 저장됩니다. 기기를 바꾸거나 브라우저 데이터를 지우기 전에 내보내기 해 두세요.</p>
@@ -290,23 +311,58 @@
     U.draft = { name, baseDate, raw, parsed, diff }; render();
   }
   const lawId = name => 'l' + C.hash(name.replace(/\s+/g, '')).toString(36);
-  function saveLaw() {
-    const d = U.draft; if (!d || !d.parsed.articles.length) return;
-    const id = lawId(d.name), old = getLaw(id), t = C.today();
+  /* 법령 저장·갱신 공통: 같은 이름이면 학습 기록을 유지하고, 바뀐 조문만 '개정' 표시 + 복습 대상으로 되돌림 */
+  function upsertLaw(base) {
+    const id = lawId(base.name), old = getLaw(id), t = C.today();
     const oldMap = old ? new Map(old.articles.map(a => [a.label, a])) : null;
-    const arts = d.parsed.articles.map(a => {
+    let changed = 0;
+    const arts = base.articles.map(a => {
       const x = Object.assign({}, a);
       if (oldMap) {
         const o = oldMap.get(a.label), k = id + '|' + a.label;
-        if (!o) x.changed = t;
-        else if (o.lines.join('\n') !== a.lines.join('\n')) { x.changed = t; if (S.srs[k]) S.srs[k].due = t; }
+        if (!o) { x.changed = t; changed++; }
+        else if (o.lines.join('\n') !== a.lines.join('\n')) { x.changed = t; changed++; if (S.srs[k]) S.srs[k].due = t; }
         else if (o.changed) x.changed = o.changed;
       }
       return x;
     });
-    const law = { id, name: d.name, baseDate: d.baseDate, importedAt: t, articles: arts };
+    const law = Object.assign({}, base, { id, importedAt: t, articles: arts });
     if (old) S.laws[S.laws.indexOf(old)] = law; else S.laws.push(law);
-    save(); U.draft = null; U.lawId = id; U.view = 'browse'; U.label = null; toast('저장했습니다'); render();
+    return { law, changed, isNew: !old };
+  }
+  function saveLaw() {
+    const d = U.draft; if (!d || !d.parsed.articles.length) return;
+    const r = upsertLaw({ name: d.name, baseDate: d.baseDate, articles: d.parsed.articles, custom: true });
+    save(); U.draft = null; U.lawId = r.law.id; U.view = 'browse'; U.label = null; toast('저장했습니다'); render();
+  }
+
+  /* ---------- 내장 법령 (data/ 폴더) 자동 불러오기 ---------- */
+  const kindLabel = m => (m['법령구분'] || '') + ' 제' + m['공포번호'] + '호';
+  async function syncBuiltin(force) {
+    let msg = '', touched = false;
+    try {
+      const r = await fetch('data/index.json', { cache: 'no-cache' });
+      if (!r.ok) throw new Error('index');
+      const idx = await r.json(), done = [];
+      for (const e of idx.laws) {
+        const old = getLaw(lawId(e.name));
+        if (old && old.custom) continue;               // 직접 붙여넣은 법령은 덮어쓰지 않음
+        if (old && old.rev === e.rev) continue;          // 같은 버전이면 건너뜀 (수동 확인 시에도 동일)
+        const r2 = await fetch('data/' + e.file, { cache: 'no-cache' });
+        if (!r2.ok) continue;
+        const d = await r2.json();
+        const res = upsertLaw({ name: d.name, baseDate: d.meta['시행일자'], articles: d.articles, meta: d.meta, pending: d.pending || [], notes: d.notes || [], builtin: true, rev: e.rev });
+        done.push({ name: d.name, changed: res.changed, isNew: res.isNew });
+      }
+      if (done.length) {
+        save(); touched = true;
+        const upd = done.filter(x => !x.isNew && x.changed);
+        msg = upd.length ? '법령 개정을 반영했습니다: ' + upd.map(x => x.name + ' ' + x.changed + '개 조문').join(', ') : '내장 법령 ' + done.length + '개를 불러왔습니다';
+      } else if (force) msg = '이미 최신 상태입니다';
+    } catch (err) { if (force) msg = '불러오지 못했습니다. 인터넷 연결을 확인하세요'; }
+    const wasLoading = U.loading; U.loading = false;
+    if (touched || wasLoading || force) render();
+    if (msg) toast(msg);
   }
 
   /* ---------- 라우팅·이벤트 ---------- */
@@ -339,6 +395,7 @@
     quizCheck: () => { const q = U.quiz, p = S.procs[q.i]; q.checked = true; p.tries = (p.tries || 0) + 1; if (q.ans.every((v, n) => v === n)) p.ok = (p.ok || 0) + 1; save(); render(); },
     quizEnd: () => { U.quiz = null; render(); },
     analyze, saveLaw,
+    resync: () => syncBuiltin(true),
     lawDel: t => {
       const law = getLaw(t.dataset.id);
       if (!law || !confirm('「' + law.name + '」과 이 법령의 학습 기록을 삭제할까요?')) return;
@@ -381,7 +438,7 @@
   });
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-  if (S.laws.length === 0) U.view = 'home';
   render();
+  syncBuiltin(false);
   window.__LS = { get S() { return S; }, U: U, render: render }; // 디버그용
 })();

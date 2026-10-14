@@ -25,10 +25,10 @@ try:
         ctx = b.new_context(viewport={'width': 1180, 'height': 820})
         pg = ctx.new_page()
         pg.on('pageerror', lambda e: errors.append('pageerror: %s' % e))
-        pg.on('console', lambda m: errors.append('console.error: %s' % m.text) if m.type == 'error' else None)
+        pg.on('console', lambda m: errors.append('console.error: %s' % m.text) if m.type == 'error' and 'ERR_FAILED' not in m.text else None)  # ERR_FAILED = 테스트가 일부러 차단한 data 요청
+        pg.route('**/data/**', lambda r: r.abort())   # 붙여넣기 흐름만 검증하려고 내장 법령 요청 차단
         pg.goto('http://localhost:8765/index.html')
-
-        assert '법령 원문을 가져오세요' in pg.inner_text('#main'), '빈 상태 안내'
+        pg.wait_for_selector('text=법령 원문을 가져오세요')
         pg.click('#nav button[data-v=manage]')
         pg.fill('#ln', '시험법'); pg.fill('#lb', '2026-01-01'); pg.fill('#lt', SAMPLE)
         pg.click('[data-act=analyze]')
@@ -96,6 +96,64 @@ try:
         pg.screenshot(path='/tmp/law-study-mobile.png')
         pg.set_viewport_size({'width': 1180, 'height': 820}); pg.click('#nav button[data-v=study]')
         pg.screenshot(path='/tmp/law-study-desktop.png')
+
+        # ---------- 내장 법령(특수교육법 3종) ----------
+        ctx2 = b.new_context(viewport={'width': 1180, 'height': 820})
+        pg2 = ctx2.new_page()
+        pg2.on('pageerror', lambda e: errors.append('pageerror2: %s' % e))
+        pg2.on('console', lambda m: errors.append('console.error2: %s' % m.text) if m.type == 'error' else None)
+        pg2.goto('http://localhost:8765/index.html')
+        pg2.wait_for_selector('text=시행 예정 개정 3건')
+        home = pg2.inner_text('#main')
+        assert '장애인 등에 대한 특수교육법 시행령' in home and '장애인 등에 대한 특수교육법 시행규칙' in home, home[:300]
+        counts = pg2.evaluate('window.__LS.S.laws.map(l => [l.name, l.articles.length, (l.pending||[]).length, !!l.builtin])')
+        assert counts == [['장애인 등에 대한 특수교육법', 41, 3, True], ['장애인 등에 대한 특수교육법 시행령', 41, 0, True], ['장애인 등에 대한 특수교육법 시행규칙', 11, 0, True]], counts
+
+        pg2.click('#nav button[data-v=browse]')
+        info = pg2.inner_text('#main')
+        assert '현행(시행 중) · 시행 2025-10-01 · 법률 제21065호' in info, info[:300]
+        assert '시행을 앞둔 개정이 3개 조문' in info
+        pg2.locator('#tocList button', has_text='제15조 특수교육대상자의 선정').first.click()
+        txt = pg2.inner_text('#artView')
+        assert '진단ㆍ평가된 사람을 특수교육대상자로 선정한다' in txt and '1. 시각장애' in txt, txt[:300]
+        pg2.fill('#q', '')
+        # 시행 예정: 현행 제12조는 그대로, 개정 후 본문은 별도 박스
+        pg2.locator('#tocList button', has_text='제12조 특수교육에 관한').first.click()
+        txt = pg2.inner_text('#artView')
+        assert '② 제1항에 따른 보고서에는 제13조제3항' in txt, txt[:400]
+        assert '시행 예정 개정' in txt and '교육감은 매년 특수교육 운영계획을 수립하여' in txt and '2027-01-08' in txt
+        # 신설 예정 조문은 시행 예정 목록에서만 보이고 암기 대상이 아님
+        assert pg2.locator('#tocList .chap', has_text='시행 예정 개정').count() == 1
+        pg2.locator('#tocList button', has_text='제28조의2').click()
+        txt = pg2.inner_text('#artView')
+        assert '현재 시행 중인 조문이 아닙니다' in txt and '행동중재전문가' in txt and '부칙 단서에 따라' in txt, txt[:500]
+        assert '2027-01-01' not in txt.split('개정 후 본문')[0], '단서 조문에 개정 전체 시행일이 붙으면 안 됨'
+        assert pg2.locator('#artView [data-act=studyOne]').count() == 0
+        # 삭제 조문(제34조)은 암기 제외: 법률 41개 중 40개
+        pg2.click('#nav button[data-v=study]')
+        assert pg2.evaluate("(()=>{const l=window.__LS.S.laws[0];return l.articles.filter(a=>a.lines.every(x=>/^삭제/.test(x))).length})()") == 1
+        pg2.click('[data-act=start][data-m=due]')
+        assert pg2.evaluate('window.__LS.U.sess.keys.length') == 10, '하루 새 조문 10개'
+        pg2.click('[data-act=endSess]')
+
+        # 개정 반영: 저장본을 옛 버전처럼 바꾸고 다시 열면 바뀐 조문이 '개정'으로 표시되고 학습 기록은 유지
+        pg2.evaluate("""(()=>{const k='lawstudy:v1',s=JSON.parse(localStorage.getItem(k));
+          const l=s.laws[0]; l.rev='old'; l.articles[0].lines[0]+=' (구버전)';
+          s.srs[l.id+'|'+l.articles[0].label]={box:3,lapses:0,reps:3,due:'2999-01-01'};
+          localStorage.setItem(k,JSON.stringify(s));})()""")
+        pg2.reload()
+        pg2.wait_for_selector('text=법령 개정을 반영했습니다')
+        after = pg2.evaluate("(()=>{const l=window.__LS.S.laws[0];return [l.articles[0].changed, l.articles[0].lines[0].includes('구버전'), window.__LS.S.srs[l.id+'|'+l.articles[0].label].due, window.__LS.S.srs[l.id+'|'+l.articles[0].label].box]})()")
+        assert after[0] and after[1] is False and after[2] <= '2030-01-01' and after[3] == 3, after
+        pg2.click('#nav button[data-v=manage]'); pg2.click('[data-act=resync]')
+        pg2.wait_for_selector('text=최신 상태')
+        pg2.set_viewport_size({'width': 390, 'height': 800}); pg2.click('#nav button[data-v=browse]')
+        assert pg2.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), '내장 법령 화면 가로 넘침'
+        pg2.screenshot(path='/tmp/law-study-builtin-mobile.png')
+        pg2.set_viewport_size({'width': 1180, 'height': 820})
+        pg2.locator('#tocList button', has_text='제28조의2').click()
+        pg2.screenshot(path='/tmp/law-study-builtin-desktop.png')
+        ctx2.close()
         b.close()
     assert not errors, errors
     print('ui_smoke: all passed')
