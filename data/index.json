@@ -31,6 +31,136 @@
    "공포번호": "360",
    "articles": 11,
    "pending": 0
+  },
+  {
+   "name": "유아교육법",
+   "file": "laws/early-act.json",
+   "rev": "c2f61401a5",
+   "kind": "법률",
+   "시행일자": "2026-05-19",
+   "공포번호": "21658",
+   "articles": 65,
+   "pending": 8
+  },
+  {
+   "name": "유아교육법 시행령",
+   "file": "laws/early-decree.json",
+   "rev": "87e0e0d3c5",
+   "kind": "대통령령",
+   "시행일자": "2026-04-14",
+   "공포번호": "36252",
+   "articles": 70,
+   "pending": 0
+  },
+  {
+   "name": "유아교육법 시행규칙",
+   "file": "laws/early-rule.json",
+   "rev": "67359ee1fa",
+   "kind": "교육부령",
+   "시행일자": "2023-01-01",
+   "공포번호": "290",
+   "articles": 24,
+   "pending": 0
+  },
+  {
+   "name": "초ㆍ중등교육법",
+   "file": "laws/school-act.json",
+   "rev": "8d4bd53f0d",
+   "kind": "법률",
+   "시행일자": "2026-09-11",
+   "공포번호": "21424",
+   "articles": 115,
+   "pending": 14
+  },
+  {
+   "name": "초ㆍ중등교육법 시행령",
+   "file": "laws/school-decree.json",
+   "rev": "fd5f4834c1",
+   "kind": "대통령령",
+   "시행일자": "2026-09-11",
+   "공포번호": "36645",
+   "articles": 176,
+   "pending": 0
+  },
+  {
+   "name": "초ㆍ중등교육법 시행규칙",
+   "file": "laws/school-rule.json",
+   "rev": "85fd60bd1b",
+   "kind": "교육부령",
+   "시행일자": "2026-03-11",
+   "공포번호": "378",
+   "articles": 99,
+   "pending": 0
+  },
+  {
+   "name": "고등교육법",
+   "file": "laws/higher-act.json",
+   "rev": "9e62692b1a",
+   "kind": "법률",
+   "시행일자": "2026-09-11",
+   "공포번호": "21423",
+   "articles": 107,
+   "pending": 5
+  },
+  {
+   "name": "고등교육법 시행령",
+   "file": "laws/higher-decree.json",
+   "rev": "bea5db70b1",
+   "kind": "대통령령",
+   "시행일자": "2026-09-11",
+   "공포번호": "36644",
+   "articles": 130,
+   "pending": 0
+  },
+  {
+   "name": "장애인복지법",
+   "file": "laws/welfare-act.json",
+   "rev": "2be94fca49",
+   "kind": "법률",
+   "시행일자": "2026-10-02",
+   "공포번호": "22024",
+   "articles": 147,
+   "pending": 6
+  },
+  {
+   "name": "장애인복지법 시행령",
+   "file": "laws/welfare-decree.json",
+   "rev": "d9f7c8dccf",
+   "kind": "대통령령",
+   "시행일자": "2026-09-01",
+   "공포번호": "36559",
+   "articles": 80,
+   "pending": 0
+  },
+  {
+   "name": "장애인복지법 시행규칙",
+   "file": "laws/welfare-rule.json",
+   "rev": "d3da7b613b",
+   "kind": "보건복지부령",
+   "시행일자": "2026-01-01",
+   "공포번호": "1149",
+   "articles": 106,
+   "pending": 0
+  },
+  {
+   "name": "장애인차별금지 및 권리구제 등에 관한 법률",
+   "file": "laws/antidisc-act.json",
+   "rev": "51aa10d559",
+   "kind": "법률",
+   "시행일자": "2025-11-11",
+   "공포번호": "21115",
+   "articles": 53,
+   "pending": 0
+  },
+  {
+   "name": "장애인차별금지 및 권리구제 등에 관한 법률 시행령",
+   "file": "laws/antidisc-decree.json",
+   "rev": "e3bb9cd94d",
+   "kind": "대통령령",
+   "시행일자": "2026-10-02",
+   "공포번호": "36728",
+   "articles": 33,
+   "pending": 0
   }
  ]
 }

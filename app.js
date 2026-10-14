@@ -58,9 +58,21 @@
   }
   const main = html => { $('#main').innerHTML = html; };
   const FOOT = '<p class="foot">※ 법령 본문은 국가법령정보센터 원문을 정리한 공개 데이터(또는 직접 붙여넣은 원문)입니다. 데이터 반영 시차가 있을 수 있으므로 업무 적용 전에는 각 조문의 「원문 보기」 링크로 현행 여부를 확인하세요. 앱이 만든 빈칸·퀴즈 등 가공 내용은 참고용입니다.</p>';
+  const famOf = n => n.replace(/\s*시행(령|규칙)$/, '');
+  function groupLaws() {
+    const g = [];
+    for (const l of S.laws) {
+      const f = famOf(l.name);
+      let x = g.find(y => y.f === f);
+      if (!x) g.push(x = { f, laws: [] });
+      x.laws.push(l);
+    }
+    return g;
+  }
   function lawSelect(id) {
     if (S.laws.length < 2) return '';
-    return `<select data-change="law" id="${id}" style="max-width:360px">${S.laws.map(l => `<option value="${l.id}" ${l.id === (curLaw() || {}).id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>`;
+    const cur = (curLaw() || {}).id, opt = l => `<option value="${l.id}" ${l.id === cur ? 'selected' : ''}>${esc(l.name)}</option>`;
+    return `<select data-change="law" id="${id}" style="max-width:360px">${groupLaws().map(g => g.laws.length > 1 ? `<optgroup label="${esc(g.f)}">${g.laws.map(opt).join('')}</optgroup>` : g.laws.map(opt).join('')).join('')}</select>`;
   }
   function rowsHtml(rows) {
     return rows.map(r => '<p class="ln ' + r.cls + '">' + r.toks.map(t => {
@@ -86,16 +98,17 @@
     main(`<h1>오늘의 학습</h1>
     <div class="grid g3">
       <div class="stat"><b>${sum('due')}</b><span>오늘 복습할 조문</span></div>
-      <div class="stat"><b>${sum('newToday')}</b><span>오늘 새로 볼 조문</span></div>
+      <div class="stat"><b>${Math.min(sum('newToday'), Math.max(0, S.settings.newPerDay - (S.daily.date === C.today() ? S.daily.n : 0)))}</b><span>오늘 새로 볼 조문</span></div>
       <div class="stat"><b>${sum('wrong')}</b><span>오답 노트</span></div>
       <div class="stat"><b>${sum('studied')}/${sum('total')}</b><span>학습한 조문</span></div>
       ${CASES.length ? `<div class="stat"><b>${caseCounts().due}</b><span>복습할 판례</span></div>` : ''}
     </div>
     <div class="row" style="margin:16px 0"><button class="btn pri" data-act="goStudy">🧠 암기 시작</button></div>
-    ${laws.map(x => `<section class="card"><h2>${esc(x.l.name)}</h2>
-      <div class="sub">기준일 ${esc(x.l.baseDate || '미입력')} · 조문 ${x.c.total}개 · 복습 ${x.c.due} · 오답 ${x.c.wrong}${x.l.pending && x.l.pending.length ? ' · 📅 시행 예정 개정 ' + x.l.pending.length + '건' : ''}</div>
-      <div class="row" style="margin-top:10px"><button class="btn sm" data-act="openLaw" data-id="${x.l.id}">조문 보기</button>
-      <a class="btn sm" href="${C.lawUrl(x.l.name)}" target="_blank" rel="noopener">원문 법령 ↗</a></div></section>`).join('')}${FOOT}`);
+    ${groupLaws().map(g => `<section class="card"><h2>${esc(g.f)}</h2>${g.laws.map(l => { const c = counts(l); return `<div style="padding:10px 0;border-top:1px solid var(--line)">
+      <div><b>${esc(l.name)}</b></div>
+      <div class="sub">기준일 ${esc(l.baseDate || '미입력')} · 조문 ${c.total}개 · 복습 ${c.due} · 오답 ${c.wrong}${l.pending && l.pending.length ? ' · 📅 시행 예정 개정 ' + l.pending.length + '건' : ''}</div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="openLaw" data-id="${l.id}">조문 보기</button>
+      <a class="btn sm" href="${C.lawUrl(l.name)}" target="_blank" rel="noopener">원문 법령 ↗</a></div></div>`; }).join('')}</section>`).join('')}${FOOT}`);
   }
 
   /* ---------- 조문 탐색 ---------- */

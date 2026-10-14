@@ -110,8 +110,25 @@ try:
         home = pg2.inner_text('#main')
         assert '장애인 등에 대한 특수교육법 시행령' in home and '장애인 등에 대한 특수교육법 시행규칙' in home, home[:300]
         counts = pg2.evaluate('window.__LS.S.laws.map(l => [l.name, l.articles.length, (l.pending||[]).length, !!l.builtin])')
-        assert counts == [['장애인 등에 대한 특수교육법', 41, 3, True], ['장애인 등에 대한 특수교육법 시행령', 41, 0, True], ['장애인 등에 대한 특수교육법 시행규칙', 11, 0, True]], counts
+        import json as _json
+        idx = _json.load(open('data/index.json', encoding='utf-8'))['laws']
+        assert counts == [[l['name'], l['articles'], l['pending'], True] for l in idx], counts
+        assert len(counts) == 16 and counts[0][0] == '장애인 등에 대한 특수교육법', len(counts)
+        names = [c[0] for c in counts]
+        for nm in ['유아교육법', '초ㆍ중등교육법', '고등교육법', '장애인복지법', '장애인차별금지 및 권리구제 등에 관한 법률']:
+            assert nm in names and nm + ' 시행령' in names, nm
 
+        newtoday = int(pg2.locator('.stat b').nth(1).inner_text())
+        assert newtoday <= 10, newtoday  # 하루 새 조문 한도는 법령 수와 무관
+        pg2.click('#nav button[data-v=browse]')
+        assert pg2.locator('#lawSel optgroup').count() == 6, pg2.locator('#lawSel optgroup').count()
+        pg2.select_option('#lawSel', label='장애인복지법')
+        w = pg2.inner_text('#main')
+        assert '시행 2026-10-02 · 법률 제22024호' in w and '복원한 것' in w and '시행을 앞둔 개정이 6개 조문' in w, w[:400]
+        pg2.select_option('#lawSel', label='초ㆍ중등교육법')
+        w = pg2.inner_text('#main')
+        assert '복원한 것' not in w and '시행을 앞둔 개정이 14개 조문' in w, w[:400]
+        pg2.select_option('#lawSel', label='장애인 등에 대한 특수교육법')
         pg2.click('#nav button[data-v=browse]')
         info = pg2.inner_text('#main')
         assert '현행(시행 중) · 시행 2025-10-01 · 법률 제21065호' in info, info[:300]

@@ -17,13 +17,28 @@ LAWS = [
     {'file': 'special-edu-decree.json', 'current': 'decree.current.md', 'upcoming': []},
     {'file': 'special-edu-rule.json', 'current': 'rule.current.md', 'upcoming': []},
 ]
+# scripts/fetch_sources.py 가 만든 파일들 (현행 + 시행 예정). (키, 출력 파일명, 시행 예정본 개수는 versions.json 에서 읽는다)
+_VERS = os.path.join(SRC, 'versions.json')
+_V = json.load(open(_VERS, encoding='utf-8'))['files'] if os.path.exists(_VERS) else {}
+for _key, _out in [
+    ('early-act', 'early-act.json'), ('early-decree', 'early-decree.json'), ('early-rule', 'early-rule.json'),
+    ('school-act', 'school-act.json'), ('school-decree', 'school-decree.json'), ('school-rule', 'school-rule.json'),
+    ('higher-act', 'higher-act.json'), ('higher-decree', 'higher-decree.json'),
+    ('welfare-act', 'welfare-act.json'), ('welfare-decree', 'welfare-decree.json'), ('welfare-rule', 'welfare-rule.json'),
+    ('antidisc-act', 'antidisc-act.json'), ('antidisc-decree', 'antidisc-decree.json'),
+]:
+    LAWS.append({'file': _out, 'current': _key + '.current.md',
+                 'upcoming': ['%s.upcoming-%d.md' % (_key, n + 1) for n in range(len(_V.get(_key, {}).get('upcoming', [])))]})
 NOTES = {
     '장애인 등에 대한 특수교육법 시행령': ['별표(특수교육대상자 선정 기준 등 표)는 원문 데이터에 포함되어 있지 않습니다. 「원문 법령」 링크에서 확인하세요.'],
     '장애인 등에 대한 특수교육법 시행규칙': ['별표·서식은 원문 데이터에 포함되어 있지 않습니다. 「원문 법령」 링크에서 확인하세요.'],
 }
+BYEOLPYO = '별표·서식은 원문 데이터에 포함되어 있지 않을 수 있습니다. 「원문 법령」 링크에서 확인하세요.'
+RESTORE_NOTE = ('이 법령은 원천 데이터의 최신본에 아직 시행되지 않은 개정이 이미 섞여 있어, 그 개정분만 되돌려 현재 시행 중인 본문으로 복원한 것입니다(기계적 처리, 개정 이력 표기는 최신 기준). '
+                '시행 전 개정은 「시행 예정」으로 따로 표시됩니다. 업무에 적용하기 전에는 「원문 법령」 링크로 확인하세요.')
 
 ART_RE = re.compile(r'^#####\s+(제(\d+)조(?:의(\d+))?)\s*(?:\((.*)\))?\s*$')
-CHAP_RE = re.compile(r'^##\s+(제\d+[장절편관].*)$')
+CHAP_RE = re.compile(r'^(#{2,4})\s+(제\d+(?:의\d+)?[편장절관].*)$')
 ANNOT = re.compile(r'\s*<[^>]*>\s*$')
 
 
@@ -53,6 +68,7 @@ def parse(path):
     text = open(path, encoding='utf-8').read()
     meta, body = read_meta(text)
     arts, chapter, cur, buchik = [], '', None, []
+    heads = {}  # 제목 단계(##=장, ###=절, ####=관) → 제목
     in_buchik = False
     for raw in body.split('\n'):
         if raw.startswith('## 부칙'):
@@ -63,7 +79,11 @@ def parse(path):
             continue
         m = CHAP_RE.match(raw)
         if m:
-            chapter = ANNOT.sub('', m.group(1)).strip(); cur = None; continue
+            lv = len(m.group(1))
+            heads[lv] = ANNOT.sub('', m.group(2)).strip()
+            for k in [k for k in heads if k > lv]:
+                del heads[k]
+            chapter = ' › '.join(heads[k] for k in sorted(heads)); cur = None; continue
         m = ART_RE.match(raw)
         if m:
             cur = {'no': int(m.group(2)), 'sub': int(m.group(3) or 0), 'label': m.group(1),
@@ -145,7 +165,7 @@ def build(entry):
         'name': cm['제목'],
         'meta': {'법령구분': gk, '공포일자': cm['공포일자'], '공포번호': cm['공포번호'].lstrip('0'), '시행일자': cm['시행일자'],
                  '소관부처': cm.get('소관부처', '교육부'), '출처': cm.get('출처', '')},
-        'notes': NOTES.get(cm['제목'], []),
+        'notes': NOTES.get(cm['제목'], ([BYEOLPYO] if gk in ('대통령령', '교육부령', '보건복지부령', '총리령') or cm['제목'].endswith(('시행령', '시행규칙')) else [])) + ([RESTORE_NOTE] if cm.get('복원처리') else []),
         'articles': [{k: a[k] for k in ('no', 'sub', 'label', 'title', 'chapter', 'lines')} for a in cur['articles']],
         'pending': plist,
     }

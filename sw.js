@@ -1,5 +1,5 @@
 /* 앱 껍데기만 캐시합니다. 법령·학습 기록은 기기 localStorage에 있고 서버로 나가지 않습니다. */
-const CACHE = 'law-study-v3';
+const CACHE = 'law-study-v4';
 const SHELL = ['./', 'index.html', 'style.css', 'core.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg'];
 
 self.addEventListener('install', e => {
