@@ -73,4 +73,18 @@ assert.equal(C.addDays('2026-12-31', 1), '2027-01-01');
 assert.equal(C.lawUrl('장애인 등에 대한 특수교육법', '제15조의2'),
   'https://www.law.go.kr/%EB%B2%95%EB%A0%B9/%EC%9E%A5%EC%95%A0%EC%9D%B8%EB%93%B1%EC%97%90%EB%8C%80%ED%95%9C%ED%8A%B9%EC%88%98%EA%B5%90%EC%9C%A1%EB%B2%95/%EC%A0%9C15%EC%A1%B0%EC%9D%98' + '2');
 
+// 일수 계산
+assert.equal(C.daysBetween('2026-10-14', '2026-10-29'), 15);
+assert.equal(C.daysBetween('2026-12-31', '2027-01-01'), 1);
+assert.equal(C.daysBetween('2026-10-14', '2026-10-14'), 0);
+assert.equal(C.daysBetween('2026-10-14', '2026-10-01'), -13);
+
+// 기한·숫자 모드: 숫자가 든 낱말만 전부 가린다
+const numArt = { label: '제16조', lines: ['① 특수교육지원센터는 진단ㆍ평가가 회부된 후 30일 이내에 진단ㆍ평가를 시행하여야 한다.', '③ 교육장 또는 교육감은 2주일 이내에 통지하여야 한다. <개정 2021.3.23>'] };
+const nb = C.makeBlanks(numArt, 4, 0);
+const numBlanked = [].concat(...nb.map(r => r.toks.filter(t => t.blank).map(t => t.core)));
+assert.deepEqual(numBlanked, ["30일", "2주일"]);
+assert.ok(C.hasNumbers(numArt));
+assert.ok(!C.hasNumbers({ label: '제1조', lines: ['이 법은 장애인 등에 대한 특수교육을 목적으로 한다.'] }));
+
 console.log('core.test: all passed');

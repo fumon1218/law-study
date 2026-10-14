@@ -89,3 +89,24 @@ details summary{cursor:pointer;margin:6px 0}
   .toc{position:static;max-height:260px}
 }
 @media print{#nav,#toast{display:none}#app{display:block}}
+
+/* v0.5: 조문 참조 링크, 검색, 현장 대응 */
+a.xref{color:var(--accent);text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+mark{background:var(--blank-open);color:inherit;border-radius:3px;padding:0 1px}
+.res{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;border-radius:12px;padding:10px 14px;margin:8px 0;cursor:pointer}
+.res b{display:block;font-size:.95rem}
+.res .sub{display:block;margin-top:2px}
+.roleRow{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.roleRow:first-of-type{border-top:0}
+.roleRow .btn{flex:none}
+details.basis{border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:8px 0;background:var(--bg)}
+details.basis summary{cursor:pointer;margin:0}
+.basisbody{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+ul.chk{margin:0;padding-left:1.2em}
+ol.steps{margin:0;padding-left:1.4em}
+ol.steps li{margin:.4em 0}
+.card.dont{border-color:var(--bad)}
+.card.dont h3{color:var(--bad)}
+.tblbox{margin:8px 0}
+@media (max-width:480px){#nav button{font-size:.68rem;padding:10px 0}#nav button .ic{font-size:1.25rem}.roleRow{flex-direction:column;align-items:flex-start}}
+@media (max-width:820px){.chips.scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch}.chips.scroll .chip{flex:none}}

@@ -17,6 +17,11 @@
     return fmt(new Date(p[0], p[1] - 1, p[2] + n));
   }
 
+  function daysBetween(a, b) {  /* a→b 일수 (b가 늦으면 양수) */
+    const p = function (d) { const x = d.split('-').map(Number); return Date.UTC(x[0], x[1] - 1, x[2]); };
+    return Math.round((p(b) - p(a)) / 86400000);
+  }
+
   /* ---------- 해시·난수 (조문마다 같은 빈칸이 나오도록) ---------- */
   function hash(str) {
     let h = 2166136261;
@@ -135,7 +140,7 @@
     return out;
   }
 
-  /* level 0=빈칸 없음, 1=하, 2=중(숫자·기한 우선 가림), 3=상 */
+  /* level 0=빈칸 없음, 1=하, 2=중(숫자·기한 우선 가림), 3=상, 4=기한·숫자만 (숫자가 든 낱말을 전부 가림) */
   function makeBlanks(a, level, salt) {
     const rows = a.lines.map(function (l) { return { cls: lineClass(l), toks: tokenize(l) }; });
     const cands = [];
@@ -144,7 +149,9 @@
       r.toks.forEach(function (t, ti) { if (!t.sp && !t.note && t.cand) cands.push([ri, ti, !!t.digit]); });
     });
     const chosen = new Set();
-    if (level > 0 && cands.length) {
+    if (level === 4) {
+      cands.forEach(function (c) { if (c[2]) chosen.add(c[0] + ',' + c[1]); });
+    } else if (level > 0 && cands.length) {
       const ratio = [0, 0.2, 0.35, 0.55][level] || 0.35;
       const want = Math.max(1, Math.round(cands.length * ratio));
       if (level >= 2) cands.filter(function (c) { return c[2]; }).forEach(function (c) { chosen.add(c[0] + ',' + c[1]); });
@@ -170,5 +177,10 @@
     return { state: st, clearWrong: clearWrong };
   }
 
-  return { BOX_DAYS: BOX_DAYS, today: today, addDays: addDays, hash: hash, lawUrl: lawUrl, parseLaw: parseLaw, isDeleted: isDeleted, makeBlanks: makeBlanks, tokenize: tokenize, nextState: nextState };
+  /* 기한·숫자 연습 대상인지 */
+  function hasNumbers(a) {
+    return makeBlanks(a, 4, 0).some(function (r) { return r.toks.some(function (t) { return t.blank; }); });
+  }
+
+  return { BOX_DAYS: BOX_DAYS, today: today, addDays: addDays, daysBetween: daysBetween, hasNumbers: hasNumbers, hash: hash, lawUrl: lawUrl, parseLaw: parseLaw, isDeleted: isDeleted, makeBlanks: makeBlanks, tokenize: tokenize, nextState: nextState };
 });

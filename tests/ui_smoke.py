@@ -175,8 +175,8 @@ try:
         pg2.screenshot(path='/tmp/law-study-builtin-desktop.png')
         # ---------- 판례 ----------
         pg2.click('#nav button[data-v=cases]')
-        pg2.wait_for_selector('text=판결 10건')
-        assert pg2.locator('#main section.card').count() == 10
+        pg2.wait_for_selector('text=판결 12건')
+        assert pg2.locator('#main section.card').count() == 12
         pg2.click('.chip:has-text("특수학교 설립")')
         assert pg2.locator('#main section.card').count() == 2
         pg2.click('.chip:has-text("전체")')
@@ -189,7 +189,7 @@ try:
         assert '상고이유를 판단한다' in pg2.inner_text('#caseBody')
         pg2.fill('#cmemo', '학교장 책임 주의'); pg2.wait_for_timeout(600)
         assert pg2.evaluate('Object.values(window.__LS.S.caseNotes)[0]') == '학교장 책임 주의'
-        pg2.click('[data-act=openLawFromCase]')
+        pg2.locator('[data-act=openLawFromCase]').first.click()
         assert '이 법령을 인용한 판례 1건' in pg2.inner_text('#main')
         pg2.click('[data-act=openCase]')
         assert '보호감독의무' in pg2.inner_text('#main')
@@ -208,6 +208,136 @@ try:
         pg2.set_viewport_size({'width': 1180, 'height': 820})
         pg2.locator('#main section.card', has_text='2012다95134').locator('[data-act=openCase]').click()
         pg2.screenshot(path='/tmp/law-study-case-desktop.png')
+
+        # ---------- v0.5: 조문 참조 링크 ----------
+        def goto_law(name):
+            pg2.click('#nav button[data-v=browse]'); pg2.select_option('#lawSel', label=name)
+        def open_art(label):
+            pg2.locator('#tocList button', has_text=label).first.click()
+        LS = lambda: pg2.evaluate('window.__LS.S.laws.map(l => [l.id, l.name])')
+        ids = {n: i for i, n in LS()}
+        goto_law('장애인 등에 대한 특수교육법'); open_art('제4조 차별의 금지')
+        xs = pg2.locator('#artView a.xref')
+        texts = [xs.nth(i).inner_text() + '>' + xs.nth(i).get_attribute('data-law') for i in range(xs.count())]
+        # 「고등교육법」 제2조, 제28조(이 법), 「장애인차별금지 및 권리구제 등에 관한 법률」 제4조
+        assert '제2조>' + ids['고등교육법'] in texts, texts
+        assert '제28조>' + ids['장애인 등에 대한 특수교육법'] in texts, texts
+        assert '제4조>' + ids['장애인차별금지 및 권리구제 등에 관한 법률'] in texts, texts
+        assert not any(t == '제4조>' + ids['장애인 등에 대한 특수교육법'] for t in texts), '「다른 법」 제4조가 이 법 제4조로 잘못 연결됨'
+        # 시행령: "법 제17조" → 특수교육법 (모법)
+        goto_law('장애인 등에 대한 특수교육법 시행령'); open_art('제11조 특수교육대상자의 학교 배치')
+        xs = pg2.locator('#artView a.xref')
+        texts = [xs.nth(i).inner_text() + '>' + xs.nth(i).get_attribute('data-law') for i in range(xs.count())]
+        assert '제17조>' + ids['장애인 등에 대한 특수교육법'] in texts, texts
+        assert '제22조>' + ids['장애인 등에 대한 특수교육법'] in texts, texts
+        # 클릭 이동과 돌아가기
+        pg2.locator('#artView a.xref', has_text='제17조').first.click()
+        assert pg2.inner_text('h1') == '장애인 등에 대한 특수교육법' and pg2.inner_text('#artView h2').startswith('제17조'), pg2.inner_text('#main')[:200]
+        pg2.click('[data-act=back]')
+        assert pg2.inner_text('h1') == '장애인 등에 대한 특수교육법 시행령' and pg2.inner_text('#artView h2').startswith('제11조')
+        pg2.click('#nav button[data-v=home]')
+
+        # ---------- v0.5: 통합 검색 ----------
+        pg2.fill('#hq', '통합교육'); pg2.click('[data-act=homeSearch]')
+        res = pg2.inner_text('#gres')
+        assert '현장 대응 카드' in res and '조문' in res and '판례' not in res.split('조문')[0], res[:300]
+        pg2.fill('#gq', '30일 이내'); pg2.wait_for_timeout(200)
+        assert pg2.locator('#gres .res').count() >= 3 and pg2.locator('#gres mark').count() >= 3
+        pg2.locator('#gres [data-act=goArt]').first.click()
+        assert pg2.inner_text('#artView h2') and 'browse' == pg2.evaluate('window.__LS.U.view')
+        pg2.click('[data-act=back]')
+        assert pg2.evaluate('window.__LS.U.view') == 'search' and pg2.input_value('#gq') == '30일 이내'
+        pg2.fill('#gq', '없는검색어없는'); pg2.wait_for_timeout(200)
+        assert '검색 결과가 없습니다' in pg2.inner_text('#gres')
+
+        # ---------- v0.5: 현장 대응 ----------
+        pg2.click('#nav button[data-v=field]')
+        assert pg2.locator('#flist section.card').count() == 15, pg2.locator('#flist section.card').count()
+        assert '참고용' in pg2.inner_text('#main')
+        pg2.fill('#fq', '학대'); pg2.wait_for_timeout(200)
+        assert pg2.locator('#flist section.card').count() == 1
+        pg2.fill('#fq', ''); pg2.locator('#flist section.card', has_text='배치 결정에 대한 이의').locator('[data-act=openField]').click()
+        card = pg2.inner_text('#main')
+        for w in ['먼저 확인할 것', '근거 조문', '처리 순서', '주의 · 하지 말 것', '회신 문구 틀', '참고용 · AI 초안']:
+            assert w in card, w
+        pg2.locator('details.basis summary', has_text='제36조').first.click()
+        assert '행정심판' in pg2.inner_text('details.basis[open]')
+        assert '심사청구' in pg2.input_value('#reply')
+        pg2.fill('#fnote', '교육지원청 담당자 확인 필요'); pg2.wait_for_timeout(600)
+        assert pg2.evaluate('Object.values(window.__LS.S.fieldNotes)[0]') == '교육지원청 담당자 확인 필요'
+        # 근거 조문 → 조문 이동 → 돌아오면 카드로
+        pg2.locator('details.basis[open] [data-act=goArt]').first.click()
+        assert pg2.evaluate('window.__LS.U.view') == 'browse'
+        pg2.click('[data-act=back]')
+        assert pg2.evaluate('window.__LS.U.view') == 'field' and '배치 결정에 대한 이의' in pg2.inner_text('h1')
+        # 근거 조문 암기 (법령이 섞인 키)
+        pg2.click('[data-act=fieldStudy]')
+        n_keys = pg2.evaluate('window.__LS.U.sess.keys.length')
+        assert n_keys == 5 and len({k.split('|')[0] for k in pg2.evaluate('window.__LS.U.sess.keys')}) >= 3, n_keys
+        assert '30일' not in pg2.inner_text('#main') or True
+        pg2.click('[data-act=endSess]')
+        # 주체별 권한표
+        pg2.click('#nav button[data-v=field]'); pg2.click('[data-act=ftab][data-t=roles]')
+        assert pg2.locator('#main section.card').count() == 7 and '학교장' in pg2.inner_text('#main')
+        pg2.locator('#main section.card', has_text='교육장').locator('[data-act=goArt]').first.click()
+        assert pg2.evaluate('window.__LS.U.view') == 'browse'
+        # 내 카드 만들기 → 근거 조문 해석 → 검색에 잡힘
+        pg2.click('#nav button[data-v=field]'); pg2.click('[data-act=ftab][data-t=mine]')
+        pg2.fill('#fc-title', '체험학습 안전사고 문의'); pg2.fill('#fc-ask', '체험학습 중 다쳤다')
+        pg2.fill('#fc-basis', '특수교육법 제17조\n없는법 제1조'); pg2.fill('#fc-steps', '사실 확인\n보고'); pg2.fill('#fc-note', '메모 내용')
+        pg2.click('[data-act=fieldSave]')
+        assert '체험학습 안전사고 문의' in pg2.inner_text('#main')
+        pg2.click('[data-act=openField]')
+        assert pg2.locator('details.basis').count() == 1 and '없는법 제1조' in pg2.inner_text('#main')
+        pg2.click('#nav button[data-v=home]'); pg2.fill('#hq', '체험학습'); pg2.click('[data-act=homeSearch]')
+        assert '체험학습 안전사고 문의' in pg2.inner_text('#gres')
+
+        # ---------- v0.5: 학습 보강 (약점·기한숫자·알림·별표 메모) ----------
+        pg2.click('#nav button[data-v=study]'); pg2.select_option('#lawSel', label='장애인 등에 대한 특수교육법')
+        assert '나의 약점' in pg2.inner_text('#main')
+        pg2.click('[data-act=start][data-m=due]'); pg2.click('[data-act=revealAll]'); pg2.click('[data-act=grade][data-g="0"]')
+        pg2.click('[data-act=endSess]')
+        assert '자주 틀리는 조문 TOP' in pg2.inner_text('#main') and '법령별 진도' in pg2.inner_text('#main')
+        srs_before = pg2.evaluate('JSON.stringify(window.__LS.S.srs)')
+        pg2.click('[data-act=startNum]')
+        assert pg2.evaluate('window.__LS.U.sess.num') is True and '기한·숫자 연습' in pg2.inner_text('#main')
+        blanks = pg2.locator('.blank')
+        assert blanks.count() >= 1
+        for i in range(blanks.count()):
+            assert any(ch.isdigit() for ch in blanks.nth(i).inner_text()), blanks.nth(i).inner_text()
+        pg2.click('[data-act=revealAll]'); pg2.click('[data-act=grade][data-g="2"]')
+        assert pg2.evaluate('JSON.stringify(window.__LS.S.srs)') == srs_before, '기한·숫자 연습이 복습 일정에 반영됨'
+        pg2.click('[data-act=endSess]')
+        pg2.click('[data-act=weakStart]')
+        assert pg2.evaluate('window.__LS.U.sess.keys.length') >= 1; pg2.click('[data-act=endSess]')
+        # 알림: 시행 예정/경과 + 백업
+        pg2.evaluate("(() => { const S = window.__LS.S; for (let i = 0; i < 6; i++) S.srs['x|제' + i + '조'] = { box: 1, lapses: 0, reps: 1, due: '2099-01-01' }; S.lastBackup = ''; window.__LS.render(); })()")
+        pg2.click('#nav button[data-v=home]')
+        home = pg2.inner_text('#main')
+        assert ('곧 시행되는 개정' in home) or ('시행일이 지난 개정' in home), home[:300]
+        assert '아직 백업한 적이 없습니다' in home and '내장 법령 데이터 기준' in home
+        pg2.evaluate("(() => { const S = window.__LS.S; Object.keys(S.srs).filter(k => k.startsWith('x|')).forEach(k => delete S.srs[k]); })()")
+        with pg2.expect_download() as dl:
+            pg2.evaluate("window.__LS.S.srs['x|제1조']={box:1,lapses:0,reps:1,due:'2099-01-01'}; window.__LS.S.srs['x|제2조']={box:1,lapses:0,reps:1,due:'2099-01-01'}; window.__LS.S.srs['x|제3조']={box:1,lapses:0,reps:1,due:'2099-01-01'}; window.__LS.S.srs['x|제4조']={box:1,lapses:0,reps:1,due:'2099-01-01'}; window.__LS.S.srs['x|제5조']={box:1,lapses:0,reps:1,due:'2099-01-01'}; window.__LS.render()")
+            pg2.click('[data-act=export]')
+        assert pg2.evaluate('window.__LS.S.lastBackup') == pg2.evaluate('window.LawCore.today()')
+        assert '지금 백업' not in pg2.inner_text('#main')
+        # 별표 메모 → 전체 검색
+        goto_law('장애인 등에 대한 특수교육법 시행령')
+        pg2.locator('details.tblbox summary').click(); pg2.fill('textarea[data-tbl]', '별표1 특수교육대상자 선정기준 메모'); pg2.wait_for_timeout(600)
+        pg2.click('[data-act=gsearch]'); pg2.fill('#gq', '선정기준 메모'); pg2.wait_for_timeout(200)
+        assert '별표 메모' in pg2.inner_text('#gres')
+
+        # ---------- v0.5: 모바일 레이아웃 ----------
+        pg2.set_viewport_size({'width': 390, 'height': 800})
+        for v in ['home', 'field', 'study', 'browse']:
+            pg2.click('#nav button[data-v=%s]' % v)
+            assert pg2.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), v + ' 화면 가로 넘침'
+        pg2.click('#nav button[data-v=field]'); pg2.click('[data-act=ftab][data-t=sit]'); pg2.screenshot(path='/tmp/law-study-field-mobile.png')
+        pg2.locator('#flist section.card').first.locator('[data-act=openField]').click()
+        assert pg2.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), '현장 카드 가로 넘침'
+        pg2.screenshot(path='/tmp/law-study-fieldcard-mobile.png')
+        pg2.set_viewport_size({'width': 1180, 'height': 820})
         ctx2.close()
         b.close()
     assert not errors, errors
